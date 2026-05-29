@@ -14,3 +14,5 @@ __pycache__/
 # Data (provided/derived; kept out of git — large & not source)
 /data/*.csv
 /data/source/
+
+.DS_Store
