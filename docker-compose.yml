@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: griddock
+      POSTGRES_PASSWORD: griddock
+      POSTGRES_DB: griddock
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U griddock"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://griddock:griddock@db:5432/griddock
+      DATA_DIR: /app/data
+    ports: ["8000:8000"]
+    volumes:
+      - "./backend:/app"
+      # read-write (not :ro per the guide) because the ETL prep step writes the
+      # derived data/NML_ev_sessions.csv from data/source/nml_ev_sessions.md.
+      - "./data:/app/data"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  pgdata: {}

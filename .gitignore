@@ -1,0 +1,16 @@
+.agents
+skills-lock.json
+docs
+.claude
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.egg-info/
+.env
+
+# Data (provided/derived; kept out of git — large & not source)
+/data/*.csv
+/data/source/
