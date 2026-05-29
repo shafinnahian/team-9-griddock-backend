@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Response
 from sqlalchemy import text
 
+from app.cache import cache
 from app.db import engine
 
 router = APIRouter(tags=["health"])
@@ -27,6 +28,8 @@ def ready(response: Response) -> dict[str, object]:
     except Exception:  # noqa: BLE001 - report degraded, never leak the error
         checks["database"] = "error"
 
-    ok = all(v == "ok" for v in checks.values())
+    checks["cache"] = "ok" if cache.loaded else "cold"
+
+    ok = checks.get("database") == "ok" and checks.get("cache") == "ok"
     response.status_code = 200 if ok else 503
     return {"status": "ok" if ok else "degraded", "checks": checks}

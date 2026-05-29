@@ -8,6 +8,7 @@ in Phase 3. The warm read-cache is hooked here at startup in Phase 3.
 from __future__ import annotations
 
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -15,11 +16,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.cache import cache
 from app.core.config import settings
 from app.errors import AppError
-from app.routers import health
+from app.routers import geography, health, market, pool, scenario, value, views
 
-app = FastAPI(title=settings.app_name, version=settings.app_version)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Warm the read-cache from Postgres on startup. If the tables are empty
+    # (ETL not yet run), this still succeeds; endpoints return empty results.
+    try:
+        cache.load()
+    except Exception as exc:  # noqa: BLE001 - log and continue; /ready will show degraded
+        print(f"[startup] cache warm failed: {exc}")
+    yield
+
+
+app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -112,6 +126,12 @@ async def unhandled_error_handler(request: Request, exc: Exception) -> JSONRespo
 
 
 app.include_router(health.router)
+app.include_router(scenario.router)
+app.include_router(pool.router)
+app.include_router(market.router)
+app.include_router(value.router)
+app.include_router(geography.router)
+app.include_router(views.router)
 
 
 @app.get("/")

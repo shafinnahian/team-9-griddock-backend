@@ -4,6 +4,8 @@
 
 **Pairs with:** `docs/infra_guideline/GridDock_DataModel_and_Calc_Spec.md` (feature IDs `F1–F19`, constants, validation numbers) and `GridDock_Infrastructure_Guideline.md` (architecture).
 
+**For implementation** (real payloads, the two user types, state model, a typed client, error handling, TS types, component map) see **`FE_INTEGRATION_GUIDE.md`** — this file is the *what*, that one is the *how*.
+
 ---
 
 ## 0. Conventions (apply to every endpoint)
@@ -104,6 +106,8 @@ interface MarketPoint {
 ---
 
 ## 3. Shared (role-agnostic) endpoints
+
+> **Status:** all §3 *and* §4 endpoints are **implemented and live** (examples show real responses); 24 tests pass. The backend contract is complete — the FE can be built against this document.
 
 These power both user views. The FE composes them, or uses the role dashboards in §4 which bundle them.
 
@@ -215,25 +219,34 @@ The **live** value engine (F15–F18). Recomputes per `(scenario, deg_cost)` —
 | `scenario` | `Scenario` | `actual` | |
 | `deg_cost` | number (€/MWh) | `50.0` | `0..200` |
 
-**Response**
+**Response** (real values, `actual` @ deg_cost 50)
 ```json
 {
   "scenario": "actual",
   "deg_cost_eur_mwh": 50.0,
   "streams": {
-    "smart_charging_eur": 0.0,
-    "neg_absorption_eur": 0.0,
-    "arbitrage_eur": 0.0,
+    "smart_charging_eur": 3084.98,
+    "neg_absorption_eur": 361.86,
+    "arbitrage_eur": 4274.73,
     "fcr_eur": null,
-    "degradation_eur": 0.0
+    "degradation_eur": 2081.63
   },
-  "net_total_eur": 0.0,
-  "per_vehicle_eur": 0.0,
-  "surplus_mwh": 0.0,
+  "net_total_eur": 5639.95,
+  "per_vehicle_eur": 22.56,
+  "surplus_mwh": 24.88,
   "benchmarks": { "french_eur_per_ev": 74, "agora_2030_eur_per_ev": 500 }
 }
 ```
-> `fcr_eur` is `null` (deferred — needs regelleistung.net pricing). FE should render it as "not yet included," not zero. `degradation_eur` is reported as a **positive cost** already netted out of `net_total_eur`. Validation anchor (`actual`, deg_cost 50): smart-charging ≈ €13/EV/yr, arbitrage ≈ €9/EV/yr.
+
+**Units & semantics (important for the FE):**
+- **`streams.*` and `net_total_eur` are FLEET-level, annualised €** (the whole 250-vehicle fleet, ×365/182-days). Use them for the stacked-bar **ValueStack**.
+- **`per_vehicle_eur`** = `net_total_eur / 250` — the per-EV headline. Use it for the headline number and benchmark comparison.
+- The streams are **disjoint and additive**: `net_total = smart_charging + neg_absorption + arbitrage − degradation (+ fcr)`. `smart_charging` is the saving from shifting charging to cheaper non-negative hours; `neg_absorption` is the bonus from being *paid* to charge at negative prices. Their sum is the total V1G saving (≈ €13.79/EV/yr → the doc's "≈€13/EV/yr" anchor).
+- `degradation_eur` is a **positive cost**, already subtracted in `net_total_eur` (don't subtract it again).
+- `fcr_eur` is `null` (deferred — needs regelleistung.net pricing). Render as "not yet included," not zero.
+- `surplus_mwh` = annualised energy absorbed at negative prices (the **SurplusCounter** mission metric).
+
+**Live-slider behaviour the FE drives** (verified): `actual`→`depot` lifts `per_vehicle_eur` from **€22.56 → €89.06**; raising `deg_cost` shrinks arbitrage (€25→€27.49, €50→€22.56, €120→€15.13/EV/yr). Validation anchors (`actual`, deg_cost 50): total V1G ≈ €13/EV/yr, net arbitrage ≈ €9/EV/yr.
 
 ### 3.7 `GET /api/geography`
 Regional / postal distribution (F8). Powers **GeographyPanel**. No params.
@@ -242,9 +255,9 @@ Regional / postal distribution (F8). Powers **GeographyPanel**. No params.
 ```json
 {
   "regions": [
-    { "region": "Frankfurt core", "sessions": 0, "vehicles": 0, "kw": 0.0, "share": 0.71 },
-    { "region": "Offenbach/E",    "sessions": 0, "vehicles": 0, "kw": 0.0, "share": 0.0 },
-    { "region": "Wiesbaden/W",    "sessions": 0, "vehicles": 0, "kw": 0.0, "share": 0.0 },
+    { "region": "Frankfurt core", "sessions": 4844, "vehicles": 250, "kw": 0.0, "share": 0.71 },
+    { "region": "Offenbach/E",    "sessions": 588,  "vehicles": 171, "kw": 0.0, "share": 0.086 },
+    { "region": "Wiesbaden/W",    "sessions": 589,  "vehicles": 173, "kw": 0.0, "share": 0.086 },
     { "region": "Other",          "sessions": 0, "vehicles": 0, "kw": 0.0, "share": 0.0 }
   ],
   "top_postal_codes": [
